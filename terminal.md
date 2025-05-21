@@ -112,6 +112,21 @@ source install/setup.bash
 ros2 run mpc_controller mpc_follower
 ```
 
+
+```markdown
+# 🔧 DWA Controller
+```
+
+```bash
+source /opt/ros/humble/setup.bash
+cd ~/f1tenth
+colcon build --packages-select dwa_follower
+source install/setup.bash
+ros2 run dwa_follower dwa_follower
+```
+
+
+
 ```markdown
 # 🧭 RViz e Rosbag
 ```
