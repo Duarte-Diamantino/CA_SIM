@@ -122,7 +122,7 @@ source /opt/ros/humble/setup.bash
 cd ~/f1tenth
 colcon build --packages-select dwa_follower
 source install/setup.bash
-ros2 run dwa_follower dwa_follower
+ros2 run dwa_follower dwa_follower_node
 ```
 
 
