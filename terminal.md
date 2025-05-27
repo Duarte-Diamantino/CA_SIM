@@ -1,3 +1,19 @@
+## 🖥️ obstaculos
+
+```bash
+cd f1tenth/
+ros2 run obstacle_publisher obstacle_publisher_node \
+  --ros-args \
+    -p positions:='[1.0,2.0,-1.5,0.3,0.0,-2.0]' \
+    -p goal:='[2.0,0.5]'
+```
+
+
+
+
+
+
+
 
 ## 🖥️ RustDesk
 
