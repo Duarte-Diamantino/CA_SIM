@@ -4,7 +4,8 @@
 cd f1tenth/
 colcon build --packages-select obstacle_publisher
 source install/setup.bash
- ros2 run obstacle_publisher obstacle_publisher_node   --ros-args   -p positions:="[1.0, 0.0, 2.0, 1.0, 2.5, -1.0, 3.0, 1.0]"   -p goal:="[4.0, 0.0]"
+source /opt/ros/humble/setup.bash
+ros2 run obstacle_publisher obstacle_publisher_node   --ros-args   -p positions:="[1.0, 0.0, 2.0, 1.0, 2.5, -1.0, 3.0, 1.0]"   -p goal:="[4.0, 0.0]"
 ```
 
 
