@@ -4,7 +4,7 @@ Este guia mostra como compilar o pacote e lançar, separadamente, o servidor de 
 
 ---
 
-## 1. Preparar e compilar o workspace
+# 1. Preparar e compilar o workspace
 
 ```bash
 # Vai para a raiz do teu workspace
@@ -19,8 +19,13 @@ colcon build
 # Carrega a instalação no ambiente
 source install/setup.bash
 ```
+## 1.1 Lançar o rviz
+```bash
+rviz2 -d ~/pickup_ws/src/pickup_description/config/display.rviz
+```
 
-## 2. Lançar o mapa no RViz
+
+# 2. Lançar o mapa no RViz
 
 ```bash
 # (Re)compila se tiveres alterações no launch de mapas
@@ -30,11 +35,9 @@ source install/setup.bash
 
 # Lança o servidor de mapa
 ros2 launch pickup_description map_only.launch.py
-
-# Abre o RViz num terminal à parte
-rviz2
 ```
-## 3. Publicar o modelo URDF (sem abrir novo RViz)
+
+# 3. Publicar o modelo URDF (sem abrir novo RViz)
 
 ```bash
 # Dá permissão de execução ao launch
