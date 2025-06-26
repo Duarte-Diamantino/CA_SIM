@@ -14,6 +14,7 @@ cd ~/pickup_ws
 rm -rf build/ install/ log/
 
 # Compila **todos** os pacotes (para instalar share/… corretamente)
+source /opt/ros/humble/setup.bash
 colcon build --packages-select pickup_description
 # Carrega a instalação no ambiente
 source install/setup.bash
