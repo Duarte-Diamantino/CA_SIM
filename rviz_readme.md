@@ -21,7 +21,7 @@ source install/setup.bash
 ```
 ## 1.1 Lançar o rviz
 ```bash
-rviz2 -d ~/pickup_ws/src/pickup_description/config/display.rviz
+rviz2 -d ~/f1tenth/pickup_description/config/display.rviz
 ```
 
 
