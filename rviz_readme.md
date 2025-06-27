@@ -30,7 +30,8 @@ rviz2 -d ~/f1tenth/src/pickup_description/config/display.rviz
 ```bash
 # (Re)compila se tiveres alterações no launch de mapas
 cd ~/pickup_ws
-colcon build
+source /opt/ros/humble/setup.bash
+colcon build --packages-select pickup_description
 source install/setup.bash
 
 # Lança o servidor de mapa
@@ -45,7 +46,10 @@ chmod +x src/pickup_description/launch/robot.launch.py
 
 # Compila e fonteia
 cd ~/pickup_ws
-colcon build
+
+colcon build --packages-select pickup_description
+
+source /opt/ros/humble/setup.bash
 source install/setup.bash
 
 # Lança o publish do URDF + TF
