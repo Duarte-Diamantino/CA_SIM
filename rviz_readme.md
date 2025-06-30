@@ -61,5 +61,6 @@ No **mesmo RViz** onde tens o mapa:
 
 # 4. Dar reset ao pose do carro
 ```bash
+source /opt/ros/humble/setup.bash
 ros2 launch pickup_description set_pose.launch.py   x:=4.0 y:=-2.0 z:=0.05 roll:=-0.2 pitch:=0.0 yaw:=0.0
 ```
