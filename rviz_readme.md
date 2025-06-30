@@ -57,4 +57,9 @@ No **mesmo RViz** onde tens o mapa:
 - Em **Displays** → **Add** → **RobotModel**  
   - **Description Source** → **File**  
   - **Description File** → `/home/duarte_diamantino/pickup_ws/src/pickup_description/urdf/pickup.urdf`  
-- (Opcional) Em **Displays** → **Add** → **TF** para ver `map` → `base_link`  
+- (Opcional) Em **Displays** → **Add** → **TF** para ver `map` → `base_link`
+
+# 4. Dar reset ao pose do carro
+```bash
+ros2 launch pickup_description set_pose.launch.py   x:=4.0 y:=-2.0 z:=0.05 roll:=-0.2 pitch:=0.0 yaw:=0.0
+```
