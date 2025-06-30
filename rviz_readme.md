@@ -18,9 +18,6 @@ source /opt/ros/humble/setup.bash
 colcon build --packages-select pickup_description
 # Carrega a instalação no ambiente
 source install/setup.bash
-```
-## 1.1 Lançar o rviz
-```bash
 rviz2 -d ~/f1tenth/src/pickup_description/config/display.rviz
 ```
 
