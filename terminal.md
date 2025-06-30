@@ -8,12 +8,25 @@ source /opt/ros/humble/setup.bash
 ros2 run obstacle_publisher obstacle_publisher_node   --ros-args   -p positions:="[1.0, 0.0, 2.0, 1.0, 2.5, -1.0, 3.0, 1.0]"   -p goal:="[4.0, 0.0]"
 ```
 
+## Comando Bluetooh
+
+```bash
+bluetoothctl
+```
+
+```bash
+scan on
+```
+Aqui descobre o comando: "[NEW] Device 40:8E:2C:A0:F8:0D Xbox Wireless Controller"
+
+```bash
+scan off
+```
 
 
-
-
-
-
+```bash
+pair #carregar tab
+```
 
 ## 🖥️ RustDesk
 
