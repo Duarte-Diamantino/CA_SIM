@@ -1,0 +1,399 @@
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from nav_msgs.msg import Odometry, Path
+from std_msgs.msg import Float64
+from geometry_msgs.msg import Point
+from visualization_msgs.msg import Marker, MarkerArray
+from sensor_msgs.msg import Joy
+import numpy as np
+import math
+from scipy.optimize import minimize
+
+# MPC parameters
+dt = 0.1                       # time step (s)
+horizon = 8                    # prediction horizon (steps) - REDUCED
+V_MAX = 2.0                    # max speed (m/s) - REDUCED for stability
+V_MIN = 0.2                    # min speed (m/s) - ALWAYS MOVING
+GAMMA_MAX = math.pi / 8.0      # max steering angle (rad) - REDUCED
+WHEEL_BASE = 0.335             # wheel base (m)
+
+# Actuation mapping constants
+MAX_RAW_SPEED_CMD = 23070.0    # raw speed units
+SERVO_CENTER = 0.5304
+SERVO_MAX    = 0.94299
+SERVO_MIN    = 0.11781
+
+# Cost weights - SIMPLE AND BALANCED
+w_cross_track = 5.0      # Cross track error (distance to path)
+w_heading = 2.0          # Heading error
+w_speed_maintain = 1.0   # Maintain reasonable speed
+w_smooth_steer = 0.5     # Smooth steering changes
+
+# Path following parameters
+lookahead_distance = 1.0    # How far ahead to look for target point
+min_lookahead = 0.5         # Minimum lookahead distance
+
+class MPCController(Node):
+    def __init__(self):
+        super().__init__('mpc_controller')
+        
+        # State
+        self.x = 0.0
+        self.y = 0.0
+        self.yaw = 0.0
+        self.have_odom = False
+        self.ref_path = []
+        self.last_gamma = 0.0
+        self.last_velocity = 1.0  # Start with reasonable velocity
+        
+        # Joy control
+        self.joy_override = False
+        
+        # Subscribers and publishers
+        self.create_subscription(Odometry, '/vesc/odom', self.odom_cb, 10)
+        self.create_subscription(Path, '/reference_path', self.path_cb, 10)
+        self.create_subscription(Joy, '/joy', self.joy_cb, 10)
+        
+        self.speed_pub = self.create_publisher(Float64, '/commands/motor/speed', 10)
+        self.steer_pub = self.create_publisher(Float64, '/commands/servo/position', 10)
+        self.marker_pub = self.create_publisher(MarkerArray, '/predicted_trajectories', 10)
+        
+        # Control timer
+        self.create_timer(dt, self.update)
+        
+        self.get_logger().info('Simplified MPC Controller initialized.')
+
+    def odom_cb(self, msg: Odometry):
+        self.x = msg.pose.pose.position.x
+        self.y = msg.pose.pose.position.y
+        q = msg.pose.pose.orientation
+        self.yaw = math.atan2(
+            2.0*(q.w*q.z + q.x*q.y),
+            1.0 - 2.0*(q.y*q.y + q.z*q.z)
+        )
+        self.have_odom = True
+
+    def joy_cb(self, msg: Joy):
+        self.joy_override = any(button > 0 for button in msg.buttons)
+
+    def path_cb(self, msg: Path):
+        pts = [(ps.pose.position.x, ps.pose.position.y) for ps in msg.poses]
+        
+        # Reverse if points come in ascending x order
+        if len(pts) >= 2 and pts[0][0] < pts[-1][0]:
+            pts.reverse()
+            self.get_logger().info('Path reversed so that highest-x is first')
+        
+        self.ref_path = pts
+        self.get_logger().info(f'Received {len(pts)} path points')
+
+    def find_lookahead_point(self, current_x, current_y):
+        """Find lookahead point on path using pure pursuit logic"""
+        if not self.ref_path:
+            return None, None, 0
+        
+        # Find closest point first
+        min_dist = float('inf')
+        closest_idx = 0
+        for i, (px, py) in enumerate(self.ref_path):
+            dist = math.hypot(current_x - px, current_y - py)
+            if dist < min_dist:
+                min_dist = dist
+                closest_idx = i
+        
+        # Look ahead from closest point
+        lookahead_dist = max(min_lookahead, min(lookahead_distance, V_MAX * dt * horizon * 0.5))
+        
+        for i in range(closest_idx, len(self.ref_path)):
+            px, py = self.ref_path[i]
+            dist = math.hypot(current_x - px, current_y - py)
+            if dist >= lookahead_dist:
+                return px, py, i
+        
+        # If no point found at lookahead distance, use last point
+        if self.ref_path:
+            px, py = self.ref_path[-1]
+            return px, py, len(self.ref_path) - 1
+        
+        return None, None, 0
+
+    def simulate_trajectory(self, v, gamma):
+        """Simulate vehicle trajectory"""
+        traj = []
+        x, y, yaw = self.x, self.y, self.yaw
+        
+        for _ in range(horizon):
+            traj.append((x, y, yaw))
+            # Bicycle model
+            x += v * math.cos(yaw) * dt
+            y += v * math.sin(yaw) * dt
+            yaw += (v / WHEEL_BASE) * math.tan(gamma) * dt
+            yaw = self.normalize_angle(yaw)
+        
+        return traj
+
+    def cross_track_error(self, x, y):
+        """Calculate minimum distance to path"""
+        if not self.ref_path:
+            return float('inf')
+        
+        min_dist = float('inf')
+        for px, py in self.ref_path:
+            dist = math.hypot(x - px, y - py)
+            if dist < min_dist:
+                min_dist = dist
+        
+        return min_dist
+
+    def heading_error_to_target(self, current_x, current_y, current_yaw):
+        """Calculate heading error to target point"""
+        target_x, target_y, _ = self.find_lookahead_point(current_x, current_y)
+        
+        if target_x is None:
+            return 0.0
+        
+        # Desired heading towards target
+        desired_yaw = math.atan2(target_y - current_y, target_x - current_x)
+        
+        # Heading error
+        heading_error = self.normalize_angle(desired_yaw - current_yaw)
+        
+        return heading_error
+
+    def cost_function(self, control_inputs):
+        """Simplified cost function focused on path following"""
+        v, gamma = control_inputs
+        
+        # Hard constraints
+        if v < V_MIN or v > V_MAX or abs(gamma) > GAMMA_MAX:
+            return 1e6
+        
+        trajectory = self.simulate_trajectory(v, gamma)
+        total_cost = 0.0
+        
+        # Cross track error cost
+        cross_track_cost = 0.0
+        for x, y, _ in trajectory:
+            cte = self.cross_track_error(x, y)
+            cross_track_cost += cte * cte  # Quadratic penalty
+        
+        total_cost += w_cross_track * cross_track_cost
+        
+        # Heading error cost (only at end of trajectory)
+        final_x, final_y, final_yaw = trajectory[-1]
+        heading_error = self.heading_error_to_target(final_x, final_y, final_yaw)
+        total_cost += w_heading * (heading_error * heading_error)
+        
+        # Speed maintenance cost (prefer moving forward)
+        speed_cost = (V_MAX * 0.6 - v) ** 2  # Prefer ~60% of max speed
+        total_cost += w_speed_maintain * speed_cost
+        
+        # Smooth steering cost
+        steer_change_cost = (gamma - self.last_gamma) ** 2
+        total_cost += w_smooth_steer * steer_change_cost
+        
+        return total_cost
+
+    def normalize_angle(self, angle):
+        """Normalize angle to [-pi, pi]"""
+        while angle > math.pi:
+            angle -= 2 * math.pi
+        while angle < -math.pi:
+            angle += 2 * math.pi
+        return angle
+
+    def publish_markers(self, trajectory, target_x, target_y):
+        """Publish visualization markers"""
+        ma = MarkerArray()
+        marker_id = 0
+        
+        # Clear previous markers
+        clear_marker = Marker()
+        clear_marker.header.frame_id = 'map'
+        clear_marker.header.stamp = self.get_clock().now().to_msg()
+        clear_marker.action = Marker.DELETEALL
+        ma.markers.append(clear_marker)
+        marker_id += 1
+        
+        # Future trajectory (yellow spheres)
+        for i, (x, y, yaw) in enumerate(trajectory):
+            m = Marker()
+            m.header.frame_id = 'map'
+            m.header.stamp = self.get_clock().now().to_msg()
+            m.ns = 'predicted_trajectory'
+            m.id = marker_id
+            m.type = Marker.SPHERE
+            m.action = Marker.ADD
+            m.pose.position = Point(x=x, y=y, z=0.0)
+            m.scale.x = m.scale.y = m.scale.z = 0.1
+            m.color.a = 0.7
+            m.color.r = 1.0
+            m.color.g = 1.0
+            m.color.b = 0.0  # Yellow
+            ma.markers.append(m)
+            marker_id += 1
+        
+        # Current vehicle position (red arrow)
+        m = Marker()
+        m.header.frame_id = 'map'
+        m.header.stamp = self.get_clock().now().to_msg()
+        m.ns = 'vehicle'
+        m.id = marker_id
+        m.type = Marker.ARROW
+        m.action = Marker.ADD
+        m.pose.position = Point(x=self.x, y=self.y, z=0.1)
+        m.pose.orientation.z = math.sin(self.yaw / 2.0)
+        m.pose.orientation.w = math.cos(self.yaw / 2.0)
+        m.scale.x = 0.5
+        m.scale.y = 0.1
+        m.scale.z = 0.1
+        m.color.a = 1.0
+        m.color.r = 1.0
+        m.color.g = 0.0
+        m.color.b = 0.0  # Red
+        ma.markers.append(m)
+        marker_id += 1
+        
+        # Target point (blue sphere)
+        if target_x is not None and target_y is not None:
+            m = Marker()
+            m.header.frame_id = 'map'
+            m.header.stamp = self.get_clock().now().to_msg()
+            m.ns = 'target'
+            m.id = marker_id
+            m.type = Marker.SPHERE
+            m.action = Marker.ADD
+            m.pose.position = Point(x=target_x, y=target_y, z=0.1)
+            m.scale.x = m.scale.y = m.scale.z = 0.2
+            m.color.a = 1.0
+            m.color.r = 0.0
+            m.color.g = 0.0
+            m.color.b = 1.0  # Blue
+            ma.markers.append(m)
+            marker_id += 1
+        
+        # Path points (green small spheres)
+        for i, (px, py) in enumerate(self.ref_path[::3]):  # Every 3rd point
+            m = Marker()
+            m.header.frame_id = 'map'
+            m.header.stamp = self.get_clock().now().to_msg()
+            m.ns = 'reference_path'
+            m.id = marker_id
+            m.type = Marker.SPHERE
+            m.action = Marker.ADD
+            m.pose.position = Point(x=px, y=py, z=0.0)
+            m.scale.x = m.scale.y = m.scale.z = 0.05
+            m.color.a = 0.5
+            m.color.r = 0.0
+            m.color.g = 1.0
+            m.color.b = 0.0  # Green
+            ma.markers.append(m)
+            marker_id += 1
+        
+        self.marker_pub.publish(ma)
+
+    def update(self):
+        """Main control loop - SIMPLIFIED"""
+        if not self.have_odom or not self.ref_path:
+            return
+        
+        # Check joy override
+        if self.joy_override:
+            return
+        
+        # Find target point
+        target_x, target_y, target_idx = self.find_lookahead_point(self.x, self.y)
+        
+        if target_x is None:
+            self.get_logger().warn('No target point found')
+            return
+        
+        # Calculate current cross track error
+        current_cte = self.cross_track_error(self.x, self.y)
+        
+        # Initial guess - start from previous solution but ensure valid speed
+        initial_v = max(V_MIN, min(V_MAX, self.last_velocity))
+        initial_guess = [initial_v, self.last_gamma * 0.8]  # Reduce steering slightly
+        
+        # Bounds
+        bounds = [(V_MIN, V_MAX), (-GAMMA_MAX, GAMMA_MAX)]
+        
+        # Optimize
+        try:
+            result = minimize(
+                self.cost_function,
+                initial_guess,
+                method='L-BFGS-B',
+                bounds=bounds,
+                options={'maxiter': 50, 'ftol': 1e-4}
+            )
+            
+            if result.success and result.fun < 1e5:
+                best_v, best_gamma = result.x
+            else:
+                self.get_logger().warn(f'Optimization failed, using safe fallback')
+                # Safe fallback: moderate speed, steer towards target
+                best_v = V_MAX * 0.4
+                heading_to_target = math.atan2(target_y - self.y, target_x - self.x)
+                heading_error = self.normalize_angle(heading_to_target - self.yaw)
+                best_gamma = max(-GAMMA_MAX, min(GAMMA_MAX, heading_error * 0.5))
+        
+        except Exception as e:
+            self.get_logger().error(f'Optimization error: {e}')
+            # Emergency fallback
+            best_v = V_MAX * 0.3
+            best_gamma = self.last_gamma * 0.5
+        
+        # Apply some smoothing
+        smooth_alpha = 0.3
+        final_v = smooth_alpha * self.last_velocity + (1 - smooth_alpha) * best_v
+        final_gamma = smooth_alpha * self.last_gamma + (1 - smooth_alpha) * best_gamma
+        
+        # Ensure minimum speed
+        final_v = max(V_MIN, final_v)
+        
+        # Generate trajectory for visualization
+        trajectory = self.simulate_trajectory(final_v, final_gamma)
+        
+        # Logging
+        self.get_logger().info(
+            f'CTE: {current_cte:.3f}m, Target: ({target_x:.2f},{target_y:.2f}), '
+            f'V: {final_v:.2f}m/s, γ: {final_gamma:.3f}rad'
+        )
+        
+        # Publish markers
+        self.publish_markers(trajectory, target_x, target_y)
+        
+        # Publish control commands
+        raw_speed = final_v / V_MAX * MAX_RAW_SPEED_CMD
+        raw_speed = max(-MAX_RAW_SPEED_CMD, min(raw_speed, MAX_RAW_SPEED_CMD))
+        speed_msg = Float64(data=raw_speed)
+        self.speed_pub.publish(speed_msg)
+        
+        # Steering
+        gamma_corrected = -final_gamma if final_v >= 0.0 else final_gamma
+        servo_cmd = SERVO_CENTER + (gamma_corrected / GAMMA_MAX) * (SERVO_MAX - SERVO_CENTER)
+        servo_cmd = max(SERVO_MIN, min(servo_cmd, SERVO_MAX))
+        steer_msg = Float64(data=servo_cmd)
+        self.steer_pub.publish(steer_msg)
+        
+        # Update for next iteration
+        self.last_velocity = final_v
+        self.last_gamma = final_gamma
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MPCController()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Interrupted, shutting down.')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
