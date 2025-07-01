@@ -7,6 +7,7 @@ Este guia mostra como compilar o pacote e lançar, separadamente, o servidor de 
 ```bash
 rm -rf build/MPC_python
 colcon build --symlink-install --packages-select MPC_python
+source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 run MPC_python mpc_controller
 ```
