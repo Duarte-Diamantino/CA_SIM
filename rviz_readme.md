@@ -71,3 +71,17 @@ No **mesmo RViz** onde tens o mapa:
 source /opt/ros/humble/setup.bash
 ros2 launch pickup_description set_pose.launch.py   x:=2.0 y:=-2.0 z:=0.05 roll:=-0.2 pitch:=0.0 yaw:=0.0
 ```
+
+# 5. desenhar a spline
+```bash
+
+cd ~/f1tenth
+colcon build --packages-select pickup_description
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch pickup_description spline.launch.py \
+  a:=1.0 b:=0.0 c:=0.0 x_min:=0.0 x_max:=5.0
+
+
+
+```
