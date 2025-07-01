@@ -3,6 +3,10 @@
 Este guia mostra como compilar o pacote e lançar, separadamente, o servidor de mapa e o modelo do robô (URDF) no ROS 2 Humble. Podes colar este conteúdo num `README.md`.
 
 ---
+rm -rf build/MPC_python
+colcon build --symlink-install --packages-select MPC_python
+source install/setup.bash
+ros2 run MPC_python mpc_controller
 
 # 1. Preparar e compilar o workspace
 
