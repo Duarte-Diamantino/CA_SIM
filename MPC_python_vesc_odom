@@ -13,7 +13,7 @@ from scipy.optimize import minimize
 # MPC parameters
 dt = 0.1                       # time step (s)
 horizon = 8                    # prediction horizon (steps) - REDUCED
-V_MAX = 2.0                    # max speed (m/s) - REDUCED for stability
+V_MAX = 1.0                    # max speed (m/s) - REDUCED for stability
 V_MIN = 0.2                    # min speed (m/s) - ALWAYS MOVING
 GAMMA_MAX = math.pi / 8.0      # max steering angle (rad) - REDUCED
 WHEEL_BASE = 0.335             # wheel base (m)
@@ -51,7 +51,7 @@ class MPCController(Node):
         self.joy_override = False
         
         # Subscribers and publishers
-        self.create_subscription(Odometry, '/vesc/odom', self.odom_cb, 10)
+        self.create_subscription(Odometry, '/odometry/filtered', self.odom_cb, 10)
         self.create_subscription(Path, '/reference_path', self.path_cb, 10)
         self.create_subscription(Joy, '/joy', self.joy_cb, 10)
         
@@ -379,7 +379,7 @@ class MPCController(Node):
         self.steer_pub.publish(steer_msg)
         
         # Update for next iteration
-        self.last_velocity = final_v
+        self.last_velocity = final_v 
         self.last_gamma = final_gamma
 
 
