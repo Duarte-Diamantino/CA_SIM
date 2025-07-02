@@ -13,7 +13,7 @@ from scipy.optimize import minimize
 # MPC parameters
 dt = 0.1                       # time step (s)
 horizon = 8                    # prediction horizon (steps) - REDUCED
-V_MAX = 2.0                    # max speed (m/s) - REDUCED for stability
+V_MAX = 1.0                    # max speed (m/s) - REDUCED for stability
 V_MIN = 0.2                    # min speed (m/s) - ALWAYS MOVING
 GAMMA_MAX = math.pi / 8.0      # max steering angle (rad) - REDUCED
 WHEEL_BASE = 0.335             # wheel base (m)
