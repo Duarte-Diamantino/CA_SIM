@@ -88,6 +88,7 @@ ros2 launch pickup_description spline.launch.py   a:=-0.7 b:=0.0 c:=4.0 x_min:=-
 ```bash
 # Vai para o teu workspace
 cd ~/f1tenth
+source /opt/ros/humble/setup.bash
 
 # Compila apenas o pacote pickup_description
 colcon build --packages-select pickup_description
