@@ -81,8 +81,22 @@ colcon build --packages-select pickup_description
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch pickup_description spline.launch.py   a:=-0.7 b:=0.0 c:=4.0 x_min:=-2.0 x_max:=1.0
+```
 
 
+# 6. Desenho da trajetoria quadrada
+```bash
+# Vai para o teu workspace
+cd ~/f1tenth
 
+# Compila apenas o pacote pickup_description
+colcon build --packages-select pickup_description
 
+# Fonteia o ambiente (bash)
+source install/setup.bash
+
+# (Opcional) certifica-te de que o teu launch está executável:
+chmod +x src/pickup_description/launch/launch_rounded_rectangle.launch.py
+
+ros2 launch pickup_description launch_rounded_rectangle.launch.py   width:=7.0 height:=5.0 radius:=1.0 center_x:=3.0 center_y:=2.5 frame_id:=map
 ```
