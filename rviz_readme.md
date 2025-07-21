@@ -99,5 +99,6 @@ source install/setup.bash
 # (Opcional) certifica-te de que o teu launch está executável:
 chmod +x src/pickup_description/launch/launch_rounded_rectangle.launch.py
 
-ros2 launch pickup_description launch_rounded_rectangle.launch.py   width:=7.0 height:=5.0 radius:=1.0 center_x:=3.0 center_y:=2.5 frame_id:=map
+ros2 launch pickup_description launch_rounded_rectangle.launch.py   width:=7.5 height:=4.0 radius:=1.0 center_x:=3.5 center_y:=2.0 frame_id:=map
+
 ```
