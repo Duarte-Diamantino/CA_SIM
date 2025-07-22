@@ -4,6 +4,19 @@ Este guia mostra como compilar o pacote e lançar, separadamente, o servidor de 
 
 ---
 
+
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --packages-select dwa_follower
+source install/setup.bash
+ros2 run dwa_follower dwa_global_follower
+```
+
+
+
+
+
 ```bash
 rm -rf build/MPC_python
 colcon build --symlink-install --packages-select MPC_python
