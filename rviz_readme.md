@@ -116,5 +116,19 @@ ros2 launch pickup_description launch_rounded_rectangle.launch.py   width:=7.5 h
 
 ```
 
+
+```bash
+# Vai para o teu workspace
+cd ~/f1tenth
+source /opt/ros/humble/setup.bash
+
+# Compila apenas o pacote pickup_description
+colcon build --packages-select pickup_description
+
+# Fonteia o ambiente (bash)
+source install/setup.bash
+
 ros2 launch pickup_description q_path.launch.py 
+```
+
 
